@@ -17,11 +17,12 @@ pthread_cond_t boatEmpty;
 
 
 
-pthread_cond_t inOahuWithRoom;
-pthread_cond_t inMolWithRoom;
+pthread_cond_t boatInOahu;
+pthread_cond_t boatInMol;
 pthread_cond_t showedUpInOahu;
 pthread_cond_t finishedTransporting;
-pthread_mutex_t peopleInOahu;
+
+pthread_mutex_t numChildrenInBoatLock;
 
 pthread_mutex_t inOahuChildLock;
 pthread_mutex_t inMolChildLock;
@@ -33,6 +34,7 @@ int adultsInOahu = 0;
 int childrenInMol = 0;
 int adultInMol = 0;
 
+int numChildrenInBoat = 0;
 
 sem_t* numpeople;
 
@@ -81,24 +83,43 @@ void* child(void* args){
 		if (inOahu){
 			pthread_mutex_lock(&inOahuChildLock);
 			if (childrenInOahu > 1){
-				pthread_cond_wait(&inOahuWithRoom, &inOahuChildLock);
-				
-
+				pthread_mutex_unlock(&inOahuChildLock);
+				pthread_mutex_lock(&loadBoat);
+				pthread_cond_wait(&boatInOahu, &loadBoat);
+				pthread_mutex_lock(&numChildrenInBoatLock)
+				numChildrenInBoat++;
+				if (numChildrenInBoat == 1){
+					pthread_mutex_unlock(&loadBoat);
+				}
+				else{
+					pthread_mutex_lock(&inOahuChildLock);
+					pthread_mutex_lock(&inMolChildLock);
+					childrenInOahu -= 2;
+					childrenInMol += 2;
+					numChildrenInBoat = 0;
+				}
+				inOahu = false;
+				pthread_mutex_unlock(&numChildrenInBoatLock)
+				pthread_cond_signal(&boatInMol);
+			}
+			else{
+				pthread_mutex_unlock(&inOahuChildLock);
+				pthread_mutex_lock(&inOahuAdultLock);
+				if (adultsInOahu > 0){
+					
+				}
 			}
 		}
-		pthread_mutex_lock(&inOahuChildLock);
-		
-		if (childrenInOahu != 0 && adultsInOahu != 0){
-			pthread_mutex_unlock(&inOahuChildLock);
-			pthread_mutex_unlock(&inOahuAdultLock);
-
-		}
 		else{
-			pthread_mutex_unlock(&inOahuChildLock);
-			pthread_mutex_unlock(&inOahuAdultLock);
-			pthread_exit(NULL);
-
+			pthread_cond_wait(&boatInMol, &loadBoat);
+			pthread_mutex_lock(&inOahuChildLock);
+			pthread_mutex_lock(&inMolChildLock);
+			childrenInOahu++;
+			childrenInMol--;
+			inOahu = true;
+			pthread_cond_signal(&boatInOahu);
 		}
+		
 	}
 
 
