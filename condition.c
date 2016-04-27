@@ -18,7 +18,8 @@ pthread_cond_t finishedTransporting;
 pthread_cond_t transportingChildren;
 
 pthread_mutex_t loadBoat;
-pthread_mutex_t numChildrenInBoatLock;
+pthread_cond_t waitingForSecondChild;
+pthread_mutex_t numchildrenInBoatLock;
 pthread_mutex_t inOahuChildLock;
 pthread_mutex_t inMolChildLock;
 pthread_mutex_t inOahuAdultLock;
@@ -30,11 +31,10 @@ int adultsInOahu = 0;
 int childrenInMol = 0;
 int adultsInMol = 0;
 
-int numChildrenInBoat = 0;
+int numchildrenInBoat = 0;
 bool boatIsInOahu = true;
 
-sem_t* numChild;
-sem_t* numAdult;
+sem_t* startInOahu;
 
 
 int main(int args, char *argv[]){
@@ -46,29 +46,13 @@ int main(int args, char *argv[]){
 	pthread_t childthreads[numchildren];
 	pthread_t adultthreads[numadults];
 	
-	
-	numChild = sem_open("num_child", O_CREAT|O_EXCL, 0466, 0);
-  	while (numChild==SEM_FAILED) {
+	startInOahu = sem_open("num_child", O_CREAT|O_EXCL, 0466, 0);
+  	while (startInOahu==SEM_FAILED) {
 	    if (errno == EEXIST) {
-	      printf("semaphore numChild already exists, unlinking and reopening\n");
+	      printf("semaphore startInOahu already exists, unlinking and reopening\n");
 	      fflush(stdout);
 	      sem_unlink("num_child");
-	      numChild = sem_open("num_child", O_CREAT|O_EXCL, 0466, 10);
-	    }
-	    else {
-	      printf("semaphore could not be opened, error # %d\n", errno);
-	      fflush(stdout);
-	      exit(1);
-	    }
-  	}
-
-  	numAdult = sem_open("num_adult", O_CREAT|O_EXCL, 0466, 0);
-  	while (numAdult==SEM_FAILED) {
-	    if (errno == EEXIST) {
-	      printf("semaphore numAdult already exists, unlinking and reopening\n");
-	      fflush(stdout);
-	      sem_unlink("num_adult");
-	      numAdult = sem_open("num_adult", O_CREAT|O_EXCL, 0466, 10);
+	      startInOahu = sem_open("num_child", O_CREAT|O_EXCL, 0466, 10);
 	    }
 	    else {
 	      printf("semaphore could not be opened, error # %d\n", errno);
@@ -80,24 +64,19 @@ int main(int args, char *argv[]){
 	int err;
 	for (int i = 0; i < numchildren; i++){
 		pthread_create(&childthreads[i], NULL, child, NULL);
-		
-		err = sem_wait(numChild);
-		// sleep(1);
+		err = sem_wait(startInOahu);
 	}
 
 	for (int i = 0; i < numadults; i++){
 		pthread_create(&adultthreads[i], NULL, adult, NULL);
-		err = sem_wait(numAdult);
-		// sleep(1);
+		err = sem_wait(startInOahu);
 	}
 
   	pthread_cond_broadcast(&showedUpInOahu);
 
   	pthread_cond_wait(&finishedTransporting, &finished);
-  	sem_close(numChild);
-  	sem_close(numAdult);
+  	sem_close(startInOahu);
   	sem_unlink("num_child");
-  	sem_unlink("num_adult");
   	exit(1);
 
 }
@@ -105,7 +84,7 @@ int main(int args, char *argv[]){
 void* child(void* args){
 	printf("Child arrived to OAHU\n");
 	fflush(stdout);
-	sem_post(numChild);	
+	sem_post(startInOahu);	
 	bool inOahu = true;
 
 	pthread_mutex_lock(&inOahuChildLock);
@@ -126,27 +105,29 @@ void* child(void* args){
 				printf("++++++Locked boat+++++\n");
 				fflush(stdout);
 				if(boatIsInOahu) {
-					numChildrenInBoat++;
-					if (numChildrenInBoat == 1){
-						printf("Child boarded boat in OAHU\n");
+					pthread_mutex_lock(&numchildrenInBoatLock);
+					numchildrenInBoat++;
+					pthread_mutex_unlock(&numchildrenInBoatLock);
+					if (numchildrenInBoat == 1){
+						printf("First child boarded boat in OAHU\n");
 						fflush(stdout);
-						pthread_mutex_unlock(&loadBoat);
+						pthread_cond_wait(&waitingForSecondChild, &loadBoat);
 					}
 					else{
-						printf("Child boarded boat in OAHU\n");
+						printf("Second child boarded boat second in OAHU\n");
 						fflush(stdout);
 						pthread_mutex_lock(&inOahuChildLock);
 						pthread_mutex_lock(&inMolChildLock);
 						childrenInOahu -= 2;
 						childrenInMol += 2;
-						numChildrenInBoat = 0;
+						numchildrenInBoat = 0;
 						pthread_mutex_unlock(&inOahuChildLock);
 						pthread_mutex_unlock(&inMolChildLock);
-						pthread_mutex_unlock(&loadBoat);
-
+						pthread_cond_signal(&waitingForSecondChild);
 					}
+					pthread_mutex_unlock(&loadBoat);
 					inOahu = false;
-					// pthread_mutex_unlock(&numChildrenInBoatLock);
+					// pthread_mutex_unlock(&numchildrenInBoatLock);
 					printf("Child arrived in MOL\n");
 					fflush(stdout);
 					pthread_cond_broadcast(&boatInMol);
@@ -158,7 +139,7 @@ void* child(void* args){
 				// pthread_cond_wait(&boatInOahu, &loadBoat);
 				// printf("++++++Boat in Oahu condition passed+++++\n");
 				// fflush(stdout);
-				// // pthread_mutex_lock(&numChildrenInBoatLock);
+				// // pthread_mutex_lock(&numchildrenInBoatLock);
 				
 
 			}
@@ -201,7 +182,7 @@ void* child(void* args){
 void* adult(void* args){
 	printf("Adult arrived to OAHU\n");
 	fflush(stdout);
-	sem_post(numAdult);
+	sem_post(startInOahu);
 	pthread_mutex_lock(&inOahuAdultLock);
 	pthread_cond_wait(&showedUpInOahu, &inOahuAdultLock);
 	// printf("hello1");
@@ -236,7 +217,7 @@ void initSynch() {
 	pthread_mutex_init(&inMolChildLock, NULL);
 	pthread_mutex_init(&inOahuAdultLock, NULL);
 	pthread_mutex_init(&inMolAdultLock, NULL);
-	pthread_mutex_init(&numChildrenInBoatLock, NULL);
+	pthread_mutex_init(&numchildrenInBoatLock, NULL);
 	pthread_mutex_init(&finished, NULL);
 
   	pthread_cond_init(&boatInOahu, NULL);
@@ -245,5 +226,7 @@ void initSynch() {
   	pthread_cond_init(&showedUpInOahu, NULL);
   	pthread_cond_init(&finishedTransporting, NULL);
   	pthread_cond_init(&transportingChildren, NULL);
+  	pthread_cond_init(&waitingForSecondChild, NULL);
+  	
  
 }
