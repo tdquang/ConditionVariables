@@ -62,22 +62,21 @@ int main(int args, char *argv[]){
 	int err;
 	for (int i = 0; i < numchildren; i++){
 		pthread_create(&childthreads[i], NULL, child, NULL);
-		printf("Waddup\n");
-		fflush(stdout);
+		
 		err = sem_wait(numpeople);
 	}
 
 	for (int i = 0; i < numadults; i++){
 		pthread_create(&adultthreads[i], NULL, adult, NULL);
+		printf("Adult stuff\n");
+		fflush(stdout);
 		err = sem_wait(numpeople);
 	}
-  	
-  	printf("Here\n");
+  	pthread_cond_broadcast(&showedUpInOahu);
+  	printf("Done\n");
 	fflush(stdout);
 
-  	pthread_cond_broadcast(&showedUpInOahu);
-
-
+  	
 
 
   	pthread_cond_wait(&finishedTransporting, NULL);
@@ -170,7 +169,6 @@ void* adult(void* args){
 	printf("Adult %s arrived to OAHU\n", (char*) args);
 	fflush(stdout);
 	sem_post(numpeople);
-	int val = 0;
 	pthread_cond_wait(&showedUpInOahu, NULL);
 	printf("Everyone has arrived");
 	fflush(stdout);
