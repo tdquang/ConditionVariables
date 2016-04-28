@@ -178,9 +178,10 @@ void* child(void* args){
 			else if(childrenInOahu == 1 && adultsInOahu != 0){
 				pthread_mutex_unlock(&inOahuChildLock);
 				pthread_mutex_unlock(&inOahuAdultLock);
-				// printf("yolo2\n");
-				// fflush(stdout);
+				printf("yolo2\n");
+				fflush(stdout);
 				pthread_mutex_unlock(&boatMutex);
+				pthread_mutex_unlock(&loadBoat);
 				pthread_cond_signal(&transportingChildren);
 			}
 			else{
@@ -212,11 +213,12 @@ void* child(void* args){
 					pthread_mutex_unlock(&inMolChildLock);
 					printf("First child arrived to Mol\n");
 					fflush(stdout);
-					boatIsInOahu = false;
+					
 					pthread_mutex_unlock(&boatMutex);
 
 
 				} else{
+					boatIsInOahu = false;
 					printf("Second child boarded the boat in Oahu\n");
 					fflush(stdout);
 					pthread_mutex_unlock(&boatMutex);
@@ -236,15 +238,16 @@ void* child(void* args){
 					numchildrenInBoat = 0;
 					pthread_mutex_unlock(&numchildrenInBoatLock);
 				}
+
 			}
+			inOahu = false;
 		}
 		else {
-			printf("I'm in mol\n");
-			fflush(stdout);
 			pthread_mutex_lock(&boatMutex);
 			while (boatIsInOahu){
 				pthread_cond_wait(&boatInMol, &boatMutex);
 			}
+			pthread_mutex_lock(&loadBoat);
 			pthread_mutex_lock(&inOahuChildLock);
 			pthread_mutex_lock(&inMolChildLock);
 			childrenInOahu++;
@@ -254,7 +257,9 @@ void* child(void* args){
 			pthread_mutex_unlock(&inOahuChildLock);
 			pthread_mutex_unlock(&inMolChildLock);
 			printf("Child arrived in OAHU\n");
+			boatIsInOahu = true;
 			fflush(stdout);
+			pthread_mutex_unlock(&loadBoat);
 			pthread_mutex_unlock(&boatMutex);
 			
 		}
@@ -284,8 +289,10 @@ void* adult(void* args){
 		pthread_cond_wait(&boatInOahu, &boatMutex);
 	}
 	pthread_mutex_lock(&inOahuChildLock);
-	while (childrenInOahu != 0) {
+	while (childrenInOahu > 1) {
 		pthread_mutex_unlock(&inOahuChildLock);
+		printf("hey");
+		fflush(stdout);
 		pthread_cond_wait(&transportingChildren, &boatMutex);
 	}
 	pthread_mutex_unlock(&inOahuChildLock);
