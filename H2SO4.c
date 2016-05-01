@@ -1,3 +1,9 @@
+/******************************************************************************
+* FILE: H2SO4.c
+* AUTHORS: Quang Tran and Cody Bohlman
+* DATE: April 27th 2016
+******************************************************************************/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
@@ -13,7 +19,7 @@ void* oxygen(void* arg){
   	printf("oxygen produced\n");
   	fflush(stdout);
 
-	// post (call up) on hydrogen semaphore to signal that a hydrogen atom
+	// post (call up) on oxygen semaphore to signal that a oxygen atom
 	// has been produced
 	sem_post(oxygen_sem);
 	return (void*) 0;
@@ -37,8 +43,8 @@ void* sulfur(void* arg){
   	printf("sulfur produced\n");
   	fflush(stdout);
 
-  	// oxygen waits (calls down) twice on the hydrogen semaphore
-  	// meaning it cannot continue until at least 2 hydrogen atoms
+  	// sulfur waits (calls down) twice on the hydrogen semaphore
+  	// meaning it cannot continue until at least 2 hydrogen and 4 oxygen atoms
   	// have been produced
   	int err = sem_wait(hydro_sem);
   	int err2 = sem_wait(hydro_sem);
